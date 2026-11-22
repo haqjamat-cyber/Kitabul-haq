@@ -3885,7 +3885,9 @@ window.EMBEDDED_SURAHS_AR={"1":[{"n":1,"t":"اَلْحَمْدُ لِلّٰهِ 
         var phase = 0;
         var freqData = null;
 
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        // Do NOT call getUserMedia on Android Capacitor — it locks the hardware mic and blocks Google SpeechRecognition!
+        var isCapNative = !!(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SpeechRecognition);
+        if (!isCapNative && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
           navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
             if (!self.listening) {
               stream.getTracks().forEach(function (t) { t.stop(); });
@@ -4052,7 +4054,7 @@ window.EMBEDDED_SURAHS_AR={"1":[{"n":1,"t":"اَلْحَمْدُ لِلّٰهِ 
       _nativeSessionActive: false,
 
       _handleNativeMatches: function (matches, isFinal) {
-        if (!matches || !matches.length) return;
+        if (!this.listening || !matches || !matches.length) return;
         this._voiceImpulse = 1.0;
         var bestTranscript = String(matches[0] || '').trim();
         if (this.cursorIdx < this.wordSlots.length && matches.length > 1) {
@@ -4080,49 +4082,39 @@ window.EMBEDDED_SURAHS_AR={"1":[{"n":1,"t":"اَلْحَمْدُ لِلّٰهِ 
         self._processedWordsCount = 0;
         var lang = self._nativeLangs[self._nativeLangIdx] || 'ar-SA';
         var st = $('mem-voice-status-text');
-        if (st) st.textContent = 'Google Mic khul raha hai (' + lang + ')...';
 
-        // Use popup: true (Google Voice Dialog) directly — works reliably on Oppo/Realme/ColorOS/all Androids
         CapSR.start({
           language: lang,
           maxResults: 5,
-          partialResults: false,
-          popup: true,
-          prompt: 'Tilawat padhein (Arabic)...'
+          partialResults: true,
+          popup: false
         }).then(function (res) {
-          self._nativeSessionActive = false;
           if (res && res.matches && res.matches.length) {
+            self._nativeSessionActive = false;
             self._handleNativeMatches(res.matches, true);
-          } else {
-            if (st) st.textContent = 'Koi aawaz nahi suni gayi — dubara padhein';
+            if (self.listening && self.cursorIdx < self.wordSlots.length) {
+              clearTimeout(self._nativeRestartTimer);
+              self._nativeRestartTimer = setTimeout(function () {
+                self._startNativeSpeechSession();
+              }, 300);
+            }
+          }
+        }).catch(function (err) {
+          self._nativeSessionActive = false;
+          var msg = (err && err.message) ? String(err.message) : String(err || '');
+          if (/language|not supported/i.test(msg) && self._nativeLangIdx < self._nativeLangs.length - 1) {
+            self._nativeLangIdx++;
+          } else if (/permission|denied/i.test(msg)) {
+            if (st) st.textContent = 'Mic permission allow karein (App Settings)';
+            self.stopListening();
+            return;
           }
           if (self.listening && self.cursorIdx < self.wordSlots.length) {
             clearTimeout(self._nativeRestartTimer);
             self._nativeRestartTimer = setTimeout(function () {
               self._startNativeSpeechSession();
-            }, 600);
-          } else if (self.cursorIdx >= self.wordSlots.length) {
-            self.stopListening();
+            }, 350);
           }
-        }).catch(function (err) {
-          self._nativeSessionActive = false;
-          var msg = (err && err.message) ? String(err.message) : String(err || 'Canceled');
-          if (/cancel|dismiss|back/i.test(msg)) {
-            if (st) st.textContent = 'Ruka hua hai — dubara Start dabayein';
-            self.stopListening();
-            return;
-          }
-          if (/language|not supported/i.test(msg) && self._nativeLangIdx < self._nativeLangs.length - 1) {
-            self._nativeLangIdx++;
-            if (st) st.textContent = 'Locale badal rahe hain (' + self._nativeLangs[self._nativeLangIdx] + ')...';
-            clearTimeout(self._nativeRestartTimer);
-            self._nativeRestartTimer = setTimeout(function () {
-              self._startNativeSpeechSession();
-            }, 400);
-            return;
-          }
-          if (st) st.textContent = 'Voice error: ' + msg;
-          self.stopListening();
         });
       },
 
@@ -4142,7 +4134,7 @@ window.EMBEDDED_SURAHS_AR={"1":[{"n":1,"t":"اَلْحَمْدُ لِلّٰهِ 
         var lbl = $('btn-mem-start-label');
         if (dock) dock.classList.add('listening');
         if (lbl) lbl.textContent = 'Rokhein';
-        if (st) st.textContent = 'Mic shuru ho raha hai...';
+        if (st) st.textContent = 'Sun raha hai... Tilawat padhein';
 
         this._startVisualizer();
 
@@ -4159,9 +4151,31 @@ window.EMBEDDED_SURAHS_AR={"1":[{"n":1,"t":"اَلْحَمْدُ لِلّٰهِ 
               self.stopListening();
               return;
             }
-            self._startNativeSpeechSession();
+            var startNow = function () {
+              CapSR.addListener('partialResults', function (data) {
+                if (data && data.matches && data.matches.length) {
+                  self._handleNativeMatches(data.matches, false);
+                }
+              });
+              CapSR.addListener('listeningState', function (ev) {
+                if (ev && ev.status === 'stopped' && self.listening && self.cursorIdx < self.wordSlots.length) {
+                  self._nativeSessionActive = false;
+                  self._processedWordsCount = 0;
+                  clearTimeout(self._nativeRestartTimer);
+                  self._nativeRestartTimer = setTimeout(function () {
+                    self._startNativeSpeechSession();
+                  }, 250);
+                }
+              });
+              self._startNativeSpeechSession();
+            };
+            if (typeof CapSR.removeAllListeners === 'function') {
+              Promise.resolve(CapSR.removeAllListeners()).then(startNow).catch(startNow);
+            } else {
+              startNow();
+            }
           }).catch(function (err) {
-            if (st) st.textContent = 'Permission error: ' + ((err && err.message) ? err.message : String(err || 'Mic check karein'));
+            if (st) st.textContent = 'Mic error: ' + ((err && err.message) ? err.message : String(err || 'Check permissions'));
             self.stopListening();
           });
           return;
@@ -4200,8 +4214,6 @@ window.EMBEDDED_SURAHS_AR={"1":[{"n":1,"t":"اَلْحَمْدُ لِلّٰهِ 
                 if (st) st.textContent = 'Mic permission allow karein (App Settings)';
               } else if (code === 'network') {
                 if (st) st.textContent = 'Voice pehchan ke liye internet chalu rakhein';
-              } else {
-                if (st) st.textContent = 'WebVoice error: ' + code;
               }
             };
             rec.onend = function () {
@@ -4216,7 +4228,7 @@ window.EMBEDDED_SURAHS_AR={"1":[{"n":1,"t":"اَلْحَمْدُ لِلّٰهِ 
             if (st) st.textContent = 'Lafz check karne ke liye line par tap karein';
           }
         } else {
-          if (st) st.textContent = 'Plugin load nahi hua — line par tap karke check karein';
+          if (st) st.textContent = 'Lafz check karne ke liye line par tap karein';
         }
       },
 
