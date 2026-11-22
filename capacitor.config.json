@@ -1,0 +1,22 @@
+{
+  "appId": "com.kitabulhaq.quran",
+  "appName": "Kitabul Haq",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": true
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 450,
+      "launchAutoHide": true,
+      "backgroundColor": "#FFFFFF",
+      "androidScaleType": "CENTER_INSIDE",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "overlaysWebView": false,
+      "backgroundColor": "#FFFFFF",
+      "style": "LIGHT"
+    }
+  }
+}
