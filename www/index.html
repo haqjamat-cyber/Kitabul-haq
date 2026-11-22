@@ -1398,7 +1398,7 @@
     }
 
 
-    /* Advanced Minimal White Splash Screen */
+    /* Advanced Minimal White Splash Screen (2.5s Smooth) */
     #kh-splash-overlay {
       position: fixed;
       inset: 0;
@@ -1408,7 +1408,7 @@
       justify-content: center;
       background: #FFFFFF;
       overflow: hidden;
-      transition: opacity 0.32s cubic-bezier(0.4, 0, 0.2, 1), transform 0.32s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.32s ease;
+      transition: opacity 0.45s cubic-bezier(0.4, 0, 0.2, 1), transform 0.45s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.45s ease;
     }
     #kh-splash-overlay.kh-splash-hide {
       opacity: 0;
@@ -1418,32 +1418,32 @@
     }
     .kh-splash-stage {
       position: relative;
-      width: 210px;
-      height: 210px;
+      width: 220px;
+      height: 220px;
       display: flex;
       align-items: center;
       justify-content: center;
     }
     .kh-splash-aura {
       position: absolute;
-      inset: -18px;
+      inset: -22px;
       border-radius: 50%;
-      background: radial-gradient(circle, rgba(13, 92, 70, 0.10) 0%, rgba(212, 164, 58, 0.08) 46%, rgba(255, 255, 255, 0) 72%);
-      animation: khAuraPulse 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+      background: radial-gradient(circle, rgba(13, 92, 70, 0.11) 0%, rgba(212, 164, 58, 0.09) 48%, rgba(255, 255, 255, 0) 74%);
+      animation: khAuraPulse 2.4s ease-in-out infinite;
     }
     .kh-splash-orbit {
       position: absolute;
       inset: 2px;
       border-radius: 50%;
-      border: 1.5px solid transparent;
-      border-top-color: rgba(212, 164, 58, 0.65);
-      border-right-color: rgba(13, 92, 70, 0.28);
-      animation: khOrbitSpin 0.95s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+      border: 2px solid transparent;
+      border-top-color: rgba(212, 164, 58, 0.78);
+      border-right-color: rgba(13, 92, 70, 0.35);
+      animation: khOrbitSpin 2.2s cubic-bezier(0.35, 0, 0.25, 1) infinite;
     }
     .kh-splash-logo-wrap {
       position: relative;
-      width: 186px;
-      height: 186px;
+      width: 192px;
+      height: 192px;
       border-radius: 50%;
       overflow: hidden;
       background: #FFFFFF;
@@ -1451,7 +1451,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      animation: khLogoReveal 0.58s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      animation: khLogoReveal 1.1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
     .kh-splash-logo-wrap img {
       width: 100%;
@@ -1466,23 +1466,21 @@
       left: -130%;
       width: 65%;
       height: 140%;
-      background: linear-gradient(105deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.65) 50%, rgba(255,255,255,0) 100%);
+      background: linear-gradient(105deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.68) 50%, rgba(255,255,255,0) 100%);
       transform: skewX(-18deg);
-      animation: khSheenSweep 0.68s 0.18s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+      animation: khSheenSweep 1.35s 0.55s cubic-bezier(0.4, 0, 0.2, 1) forwards;
     }
     @keyframes khLogoReveal {
-      0% { transform: scale(0.84); opacity: 0; }
+      0% { transform: scale(0.92); opacity: 0.85; }
       100% { transform: scale(1); opacity: 1; }
     }
     @keyframes khAuraPulse {
-      0% { transform: scale(0.75); opacity: 0; }
-      65% { transform: scale(1.06); opacity: 1; }
-      100% { transform: scale(1); opacity: 0.85; }
+      0%, 100% { transform: scale(0.94); opacity: 0.65; }
+      50% { transform: scale(1.08); opacity: 1; }
     }
     @keyframes khOrbitSpin {
-      0% { transform: rotate(-70deg) scale(0.92); opacity: 0; }
-      40% { opacity: 1; }
-      100% { transform: rotate(110deg) scale(1); opacity: 0.75; }
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
     }
     @keyframes khSheenSweep {
       0% { left: -130%; }
@@ -4049,18 +4047,69 @@ window.EMBEDDED_SURAHS_AR={"1":[{"n":1,"t":"اَلْحَمْدُ لِلّٰهِ 
 
       _nativeRestartTimer: null,
       _nativeUsingCap: false,
+      _nativeLangIdx: 0,
+      _nativeLangs: ['ar-SA', 'ar-EG', 'ar'],
+      _nativeSessionActive: false,
+
+      _handleNativeMatches: function (matches, isFinal) {
+        if (!this.listening || !matches || !matches.length) return;
+        this._voiceImpulse = 1.0;
+        var bestTranscript = String(matches[0] || '').trim();
+        if (this.cursorIdx < this.wordSlots.length && matches.length > 1) {
+          var expectedNorm = this.wordSlots[this.cursorIdx].norm;
+          for (var a = 0; a < matches.length; a++) {
+            var cand = String(matches[a] || '').trim();
+            if (this._isWordMatch(expectedNorm, MushafEngine.normalizeAr(cand))) {
+              bestTranscript = cand;
+              break;
+            }
+          }
+        }
+        if (bestTranscript) {
+          var st = $('mem-voice-status-text');
+          if (st) st.textContent = 'Suna: ' + bestTranscript;
+          this._applySpokenText(bestTranscript, !!isFinal);
+        }
+      },
 
       _startNativeSpeechSession: function () {
         var self = this;
         var CapSR = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SpeechRecognition;
-        if (!CapSR || !self.listening) return;
+        if (!CapSR || !self.listening || self._nativeSessionActive) return;
+        self._nativeSessionActive = true;
         self._processedWordsCount = 0;
+        var lang = self._nativeLangs[self._nativeLangIdx] || 'ar-SA';
         CapSR.start({
-          language: 'ar-SA',
-          maxResults: 3,
+          language: lang,
+          maxResults: 5,
           partialResults: true,
           popup: false
-        }).catch(function () {
+        }).then(function (res) {
+          self._nativeSessionActive = false;
+          if (res && res.matches && res.matches.length) {
+            self._handleNativeMatches(res.matches, true);
+          }
+          if (self.listening) {
+            clearTimeout(self._nativeRestartTimer);
+            self._nativeRestartTimer = setTimeout(function () {
+              self._startNativeSpeechSession();
+            }, 220);
+          }
+        }).catch(function (err) {
+          self._nativeSessionActive = false;
+          var msg = (err && err.message) ? String(err.message) : String(err || '');
+          var st = $('mem-voice-status-text');
+          if (/language|not supported/i.test(msg) && self._nativeLangIdx < self._nativeLangs.length - 1) {
+            self._nativeLangIdx++;
+          } else if (/permission|denied/i.test(msg)) {
+            if (st) st.textContent = 'Mic permission allow karein (App Settings)';
+            self.stopListening();
+            return;
+          } else if (/not available|service/i.test(msg)) {
+            if (st) st.textContent = 'Phone mein Google Speech Service install/enable karein';
+            self.stopListening();
+            return;
+          }
           if (self.listening) {
             clearTimeout(self._nativeRestartTimer);
             self._nativeRestartTimer = setTimeout(function () {
@@ -4081,6 +4130,7 @@ window.EMBEDDED_SURAHS_AR={"1":[{"n":1,"t":"اَلْحَمْدُ لِلّٰهِ 
         this.listening = true;
         this._processedWordsCount = 0;
         this._voiceImpulse = 0.7;
+        this._nativeSessionActive = false;
         var dock = $('mem-voice-dock');
         var lbl = $('btn-mem-start-label');
         if (dock) dock.classList.add('listening');
@@ -4092,7 +4142,14 @@ window.EMBEDDED_SURAHS_AR={"1":[{"n":1,"t":"اَلْحَمْدُ لِلّٰهِ 
         var CapSR = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SpeechRecognition;
         if (CapSR) {
           this._nativeUsingCap = true;
-          CapSR.checkPermissions().then(function (perm) {
+          CapSR.available().then(function (avail) {
+            if (avail && avail.available === false) {
+              if (st) st.textContent = 'Phone mein Google Voice/Speech app enable karein';
+              self.stopListening();
+              throw new Error('UNAVAILABLE');
+            }
+            return CapSR.checkPermissions();
+          }).then(function (perm) {
             if (perm && perm.speechRecognition === 'granted') return perm;
             return CapSR.requestPermissions();
           }).then(function (perm) {
@@ -4104,34 +4161,25 @@ window.EMBEDDED_SURAHS_AR={"1":[{"n":1,"t":"اَلْحَمْدُ لِلّٰهِ 
             }
             return CapSR.removeAllListeners().then(function () {
               CapSR.addListener('partialResults', function (data) {
-                if (!self.listening || !data || !data.matches || !data.matches.length) return;
-                self._voiceImpulse = 1.0;
-                var bestTranscript = data.matches[0] || '';
-                if (self.cursorIdx < self.wordSlots.length && data.matches.length > 1) {
-                  var expectedNorm = self.wordSlots[self.cursorIdx].norm;
-                  for (var a = 0; a < data.matches.length; a++) {
-                    var cand = data.matches[a] || '';
-                    if (self._isWordMatch(expectedNorm, MushafEngine.normalizeAr(cand))) {
-                      bestTranscript = cand;
-                      break;
-                    }
-                  }
+                if (data && data.matches && data.matches.length) {
+                  self._handleNativeMatches(data.matches, false);
                 }
-                self._applySpokenText(String(bestTranscript).trim(), false);
               });
               CapSR.addListener('listeningState', function (ev) {
                 if (ev && ev.status === 'stopped' && self.listening) {
+                  self._nativeSessionActive = false;
                   self._processedWordsCount = 0;
                   clearTimeout(self._nativeRestartTimer);
                   self._nativeRestartTimer = setTimeout(function () {
                     self._startNativeSpeechSession();
-                  }, 180);
+                  }, 250);
                 }
               });
               self._startNativeSpeechSession();
             });
-          }).catch(function () {
-            if (st) st.textContent = 'Voice shuru karne mein dikkat — internet aur mic check karein';
+          }).catch(function (err) {
+            if (err && err.message === 'UNAVAILABLE') return;
+            if (st) st.textContent = 'Voice error: ' + ((err && err.message) ? err.message : 'Internet aur Mic check karein');
           });
           return;
         }
@@ -4943,9 +4991,9 @@ window.EMBEDDED_SURAHS_AR={"1":[{"n":1,"t":"اَلْحَمْدُ لِلّٰهِ 
         } catch (e) {}
       }
       window.addEventListener('load', function () {
-        setTimeout(hideKhSplash, 850);
+        setTimeout(hideKhSplash, 2500);
       });
-      setTimeout(hideKhSplash, 1600);
+      setTimeout(hideKhSplash, 3200);
 
       try {
         var CapApp = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
