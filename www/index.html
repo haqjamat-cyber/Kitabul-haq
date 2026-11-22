@@ -660,11 +660,11 @@
 
     .mushaf-line {
       font-family: var(--font-ar); direction: rtl; unicode-bidi: isolate; width: 100%;
-      font-size: clamp(16px, 4vw, 22.5px); line-height: 1.85; color: var(--text-main); user-select: text;
+      font-size: calc(clamp(18px, 4.6vw, 25px) * var(--mushaf-zoom, 1)); line-height: 1.9; color: var(--text-main); user-select: text;
     }
     .mushaf-page-frame.special-opening .mushaf-line {
-      font-size: clamp(17.5px, 4.45vw, 23.5px);
-      line-height: 2.02;
+      font-size: calc(clamp(19.5px, 5vw, 26px) * var(--mushaf-zoom, 1));
+      line-height: 2.05;
     }
     .mushaf-line.justified { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 0 2px; }
     .mushaf-line.centered { display: flex; justify-content: center; gap: 0.24em; flex-wrap: wrap; }
@@ -4005,8 +4005,23 @@ window.EMBEDDED_SURAHS_AR={"1":[{"n":1,"t":"اَلْحَمْدُ لِلّٰهِ 
             this._processedWordsCount = i + 1;
             if (st) st.textContent = 'Sahi! Aage padhein...';
           } else {
+            // Ignore repeated words from recently revealed slots (e.g. after pause/waqf)
+            var isRecentRepeat = false;
+            for (var back = 1; back <= 3; back++) {
+              if (this.cursorIdx - back >= 0 &&
+                  this._isWordMatch(this.wordSlots[this.cursorIdx - back].norm, sw)) {
+                isRecentRepeat = true;
+                break;
+              }
+            }
+            if (isRecentRepeat) {
+              this._processedWordsCount = i + 1;
+              continue;
+            }
+
+            // ONLY mark skipped words red when the user actually moves ahead
             var matchedAhead = -1;
-            for (var look = 1; look <= 2; look++) {
+            for (var look = 1; look <= 3; look++) {
               if (this.cursorIdx + look < this.wordSlots.length &&
                   this._isWordMatch(this.wordSlots[this.cursorIdx + look].norm, sw)) {
                 matchedAhead = this.cursorIdx + look;
@@ -4021,13 +4036,10 @@ window.EMBEDDED_SURAHS_AR={"1":[{"n":1,"t":"اَلْحَمْدُ لِلّٰهِ 
               this._markSlot(matchedAhead, 'revealed');
               this.cursorIdx = matchedAhead + 1;
               this._processedWordsCount = i + 1;
-              if (st) st.textContent = 'Galati hui (Laal lafz dekhein) • Kul galatiyan: ' + this._errorCount;
-            } else if (isFinal || i < filtered.length - 1) {
-              this._markSlot(this.cursorIdx, 'error');
-              this._errorCount++;
-              this.cursorIdx++;
+              if (st) st.textContent = 'Lafz chhoot gaya (Laal lafz dekhein) • Kul galatiyan: ' + this._errorCount;
+            } else {
+              // User paused or word not yet matched — never mark unread words red
               this._processedWordsCount = i + 1;
-              if (st) st.textContent = 'Galati: Sahi lafz "' + slot.text + '" • Galatiyan: ' + this._errorCount;
             }
           }
         }
@@ -5001,6 +5013,52 @@ window.EMBEDDED_SURAHS_AR={"1":[{"n":1,"t":"اَلْحَمْدُ لِلّٰهِ 
           });
         }
       } catch (e) {}
+    })();
+
+    // Pinch-to-Zoom for Para (Mushaf) reading view
+    (function () {
+      var savedZoom = parseFloat(localStorage.getItem('kh_mushaf_zoom') || '1');
+      if (isNaN(savedZoom) || savedZoom < 0.75 || savedZoom > 1.8) savedZoom = 1;
+      document.documentElement.style.setProperty('--mushaf-zoom', savedZoom.toFixed(3));
+
+      var pinchStartDist = 0;
+      var pinchStartZoom = savedZoom;
+      var isPinching = false;
+
+      function getDist(t1, t2) {
+        var dx = t1.clientX - t2.clientX;
+        var dy = t1.clientY - t2.clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+      }
+
+      document.addEventListener('touchstart', function (e) {
+        if (e.touches && e.touches.length === 2) {
+          var target = e.target && e.target.closest ? e.target.closest('.mushaf-page-frame') : null;
+          if (!target) return;
+          isPinching = true;
+          pinchStartDist = getDist(e.touches[0], e.touches[1]);
+          pinchStartZoom = savedZoom;
+        }
+      }, { passive: true });
+
+      document.addEventListener('touchmove', function (e) {
+        if (!isPinching || !e.touches || e.touches.length !== 2) return;
+        var dist = getDist(e.touches[0], e.touches[1]);
+        if (pinchStartDist > 10) {
+          var nextZoom = pinchStartZoom * (dist / pinchStartDist);
+          if (nextZoom < 0.75) nextZoom = 0.75;
+          if (nextZoom > 1.8) nextZoom = 1.8;
+          savedZoom = nextZoom;
+          document.documentElement.style.setProperty('--mushaf-zoom', savedZoom.toFixed(3));
+        }
+      }, { passive: true });
+
+      document.addEventListener('touchend', function (e) {
+        if (isPinching && (!e.touches || e.touches.length < 2)) {
+          isPinching = false;
+          try { localStorage.setItem('kh_mushaf_zoom', savedZoom.toFixed(3)); } catch (err) {}
+        }
+      }, { passive: true });
     })();
   </script>
 </body>
