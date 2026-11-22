@@ -4085,15 +4085,17 @@ window.EMBEDDED_SURAHS_AR={"1":[{"n":1,"t":"اَلْحَمْدُ لِلّٰهِ 
           partialResults: true,
           popup: false
         }).then(function (res) {
-          self._nativeSessionActive = false;
+          // With partialResults: true, start() resolves immediately while mic stays open.
+          // Do NOT restart here — wait for listeningState 'stopped' event!
           if (res && res.matches && res.matches.length) {
+            self._nativeSessionActive = false;
             self._handleNativeMatches(res.matches, true);
-          }
-          if (self.listening) {
-            clearTimeout(self._nativeRestartTimer);
-            self._nativeRestartTimer = setTimeout(function () {
-              self._startNativeSpeechSession();
-            }, 220);
+            if (self.listening) {
+              clearTimeout(self._nativeRestartTimer);
+              self._nativeRestartTimer = setTimeout(function () {
+                self._startNativeSpeechSession();
+              }, 300);
+            }
           }
         }).catch(function (err) {
           self._nativeSessionActive = false;
