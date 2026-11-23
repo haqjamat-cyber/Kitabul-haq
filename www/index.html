@@ -649,6 +649,8 @@
       padding: 1px 4px;
       margin-bottom: 1px;
       transition: background-color 0.2s var(--ease-smooth);
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
     }
     [data-theme="dark"] .mushaf-line-row { background: rgba(42, 143, 114, 0.06); }
     .mushaf-line-row:last-child { border-bottom: none; margin-bottom: 0; }
@@ -660,14 +662,16 @@
 
     .mushaf-line {
       font-family: var(--font-ar); direction: rtl; unicode-bidi: isolate; width: 100%;
-      font-size: clamp(18px, 4.6vw, 25px); line-height: 1.9; color: var(--text-main); user-select: text;
+      font-size: clamp(16px, 4.05vw, 22.5px); line-height: 1.82; color: var(--text-main);
+      user-select: none; -webkit-tap-highlight-color: transparent;
+      white-space: nowrap; overflow: hidden;
     }
     .mushaf-page-frame.special-opening .mushaf-line {
-      font-size: clamp(19.5px, 5vw, 26px);
-      line-height: 2.05;
+      font-size: clamp(17.5px, 4.45vw, 23.5px);
+      line-height: 2.0;
     }
-    .mushaf-line.justified { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 0 2px; }
-    .mushaf-line.centered { display: flex; justify-content: center; gap: 0.24em; flex-wrap: wrap; }
+    .mushaf-line.justified { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: nowrap; gap: 0 2px; }
+    .mushaf-line.centered { display: flex; justify-content: center; align-items: baseline; gap: 0.24em; flex-wrap: nowrap; }
     .mushaf-line.mushaf-basmallah-line {
       display: flex; justify-content: center; color: var(--primary-deep); background: rgba(196, 145, 40, 0.08);
       border-top: 1.5px solid var(--gold-bold); border-bottom: 1.5px solid var(--gold-bold); border-radius: 7px;
@@ -1218,8 +1222,8 @@
       margin-bottom: 1px;
     }
     #mem-mushaf-canvas .mushaf-line {
-      font-size: clamp(18px, 4.6vw, 25px);
-      line-height: 1.9;
+      font-size: clamp(16px, 4.05vw, 22.5px);
+      line-height: 1.82;
       flex-wrap: nowrap !important;
       white-space: nowrap;
       overflow: hidden;
@@ -1740,14 +1744,16 @@
 
   <!-- Memorize Recitation Page Screen -->
   <section id="screen-memorize-practice" class="screen no-bottom-nav">
-    <header class="mushaf-header" style="display:flex;justify-content:space-between;align-items:center;">
-      <button class="icon-btn" style="width:36px;height:36px;" onclick="window.Router.back()" aria-label="Back">
+    <header class="mushaf-header">
+      <button class="icon-btn" style="width:34px;height:34px;" onclick="window.Router.back()" aria-label="Back">
         <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
       </button>
-      <div class="mushaf-running-surah" id="mem-running-meta"><span>الْفَاتِحَة</span> <span class="num-ar-badge">١</span></div>
+      <div class="mushaf-running-surah" id="mem-running-surah"><span>الْفَاتِحَة</span> <span class="num-ar-badge">١</span></div>
       <button class="mushaf-page-pill" id="mem-page-indicator" onclick="window.App.openGoToPageModal()">
         <span>1</span><span>/</span><span class="num-ar-badge">١</span>
       </button>
+      <div class="mushaf-running-juz" id="mem-running-meta"><span>الم</span> <span class="num-ar-badge">١</span></div>
+      <div style="width:34px;height:34px;"></div>
     </header>
 
     <div class="mushaf-book-stage">
@@ -3327,8 +3333,31 @@ window.EMBEDDED_SURAHS_AR={"1":[{"n":1,"t":"اَلْحَمْدُ لِلّٰهِ 
               if (nVal >= 1 && nVal <= maxAyah) nums.push(nVal);
             }
           }
+          /* Decode IndoPak AlQalamQuran PUA ayah-number glyphs (U+F500 = 1 .. U+F61D = 286) */
+          for (var cIdx = 0; cIdx < tok.length; cIdx++) {
+            var cp = tok.charCodeAt(cIdx);
+            if (cp >= 0xF500 && cp <= 0xF61D) {
+              var pVal = (cp - 0xF500) + 1;
+              if (pVal >= 1 && pVal <= maxAyah) nums.push(pVal);
+            }
+          }
         }
         return nums;
+      },
+
+      _hasSpecialAyahEndMarker: function (tokens) {
+        for (var w = 0; w < tokens.length; w++) {
+          var tok = String(tokens[w] || '');
+          if (tok.indexOf('\u06DF') !== -1) {
+            var hasStd = false;
+            for (var c = 0; c < tok.length; c++) {
+              var cp = tok.charCodeAt(c);
+              if (cp >= 0xF500 && cp <= 0xF61D) { hasStd = true; break; }
+            }
+            if (!hasStd) return true;
+          }
+        }
+        return false;
       },
 
       /* Find the exact ayah index (1..maxAyah) across the ENTIRE Surah that best matches a given line's Arabic words */
@@ -3392,6 +3421,20 @@ window.EMBEDDED_SURAHS_AR={"1":[{"n":1,"t":"اَلْحَمْدُ لِلّٰهِ 
           topSurah = firstBannerSurah - 1;
         } else if (firstBannerSurah >= 1 && !hasAyahBeforeFirstBanner) {
           topSurah = firstBannerSurah;
+        } else if (window.MUSHAF_DATA) {
+          for (var backP = p - 1; backP >= 1; backP--) {
+            var bPg = window.MUSHAF_DATA[backP];
+            if (!bPg || !bPg.lines) continue;
+            var bKs = Object.keys(bPg.lines).sort(function (a, b) { return Number(b) - Number(a); });
+            var foundS = 0;
+            for (var bi = 0; bi < bKs.length; bi++) {
+              if (bPg.lines[bKs[bi]] && bPg.lines[bKs[bi]].type === 'surah_name') {
+                foundS = parseInt(bPg.lines[bKs[bi]].surah_number, 10) || 0;
+                break;
+              }
+            }
+            if (foundS) { topSurah = foundS; break; }
+          }
         }
         if (p === 1) topSurah = 1;
         if (p === 2) topSurah = 2;
@@ -3414,6 +3457,15 @@ window.EMBEDDED_SURAHS_AR={"1":[{"n":1,"t":"اَلْحَمْدُ لِلّٰهِ 
         }
         if (curSeg.lines.length) segments.push(curSeg);
 
+        var nextPageStartsNewSurah = false;
+        if (p < 610 && window.MUSHAF_DATA && window.MUSHAF_DATA[p + 1] && window.MUSHAF_DATA[p + 1].lines) {
+          var nLines = window.MUSHAF_DATA[p + 1].lines;
+          var nKeys = Object.keys(nLines).sort(function (a, b) { return Number(a) - Number(b); });
+          if (nKeys.length && nLines[nKeys[0]] && nLines[nKeys[0]].type === 'surah_name') {
+            nextPageStartsNewSurah = true;
+          }
+        }
+
         var uniqueSurahs = [];
         for (var u = 0; u < segments.length; u++) {
           if (uniqueSurahs.indexOf(segments[u].surah) === -1) uniqueSurahs.push(segments[u].surah);
@@ -3435,16 +3487,43 @@ window.EMBEDDED_SURAHS_AR={"1":[{"n":1,"t":"اَلْحَمْدُ لِلّٰهِ 
                 var maxA = sInfo[3];
                 var aList = surahTextById[seg.surah] || null;
 
-                /* Find exact starting ayah of first line in this segment across the Surah */
+                /* Find exact starting ayah of this segment using explicit IndoPak ayah markers first */
                 var currentAyah = 1;
                 if (seg.startsNewSurah) {
                   currentAyah = 1;
                 } else if (seg.lines.length) {
-                  var firstNums = self.extractLineEndAyahNumbers(seg.lines[0].tokens, maxA);
-                  if (firstNums.length) {
-                    currentAyah = firstNums[0];
+                  var firstExplicit = 0;
+                  for (var fe = 0; fe < seg.lines.length; fe++) {
+                    var feNums = self.extractLineEndAyahNumbers(seg.lines[fe].tokens, maxA);
+                    if (feNums.length) {
+                      firstExplicit = feNums[0];
+                      break;
+                    }
+                  }
+                  if (firstExplicit > 0) {
+                    currentAyah = firstExplicit;
+                  } else if (window.MUSHAF_DATA) {
+                    /* Look backwards in MUSHAF_DATA for the last ayah marker of this Surah */
+                    var prevMarker = 0;
+                    for (var pp = p - 1; pp >= 1 && !prevMarker; pp--) {
+                      var pPg = window.MUSHAF_DATA[pp];
+                      if (!pPg || !pPg.lines) continue;
+                      var pKs = Object.keys(pPg.lines).sort(function (a, b) { return Number(a) - Number(b); });
+                      var pAllNums = [];
+                      for (var pk = 0; pk < pKs.length; pk++) {
+                        var pLn = pPg.lines[pKs[pk]];
+                        if (pLn && pLn.type === 'ayah' && Array.isArray(pLn.data)) {
+                          pAllNums = pAllNums.concat(self.extractLineEndAyahNumbers(pLn.data, maxA));
+                        }
+                      }
+                      if (pAllNums.length) prevMarker = pAllNums[pAllNums.length - 1];
+                    }
+                    if (prevMarker > 0) {
+                      currentAyah = Math.min(maxA, prevMarker + 1);
+                    } else if (aList) {
+                      currentAyah = self.findBestAyahAcrossSurah(seg.lines[0].tokens, aList, 1, maxA, 1);
+                    }
                   } else if (aList) {
-                    /* Estimate proportional ayah only as initial tie-breaker, then search full Surah */
                     var sStart = self.SURAH_START_PAGES[seg.surah - 1] || 1;
                     var nextStart = self.SURAH_START_PAGES[seg.surah] || 605;
                     if (nextStart <= sStart) nextStart = sStart + 1;
@@ -3467,27 +3546,31 @@ window.EMBEDDED_SURAHS_AR={"1":[{"n":1,"t":"اَلْحَمْدُ لِلّٰهِ 
                       }
                       currentAyah = Math.min(maxA, targetEx + 1);
                     }
-                  } else if (aList) {
-                    /* Look ahead slightly (up to currentAyah + 5) so a single line doesn't jump wildly across the Surah */
-                    var matchedA = self.findBestAyahAcrossSurah(
-                      itemLine.tokens,
-                      aList,
-                      currentAyah,
-                      Math.min(maxA, currentAyah + 5),
-                      currentAyah
-                    );
-                    if (matchedA < currentAyah) matchedA = currentAyah;
-                    for (var fillM = currentAyah; fillM <= matchedA; fillM++) {
-                      var prevM = queue.length ? queue[queue.length - 1] : null;
-                      if (!prevM || prevM.surah !== seg.surah || prevM.ayah !== fillM) {
-                        queue.push({ surah: seg.surah, ayah: fillM, rowNum: itemLine.rowNum });
-                      }
-                    }
-                    currentAyah = matchedA;
                   } else {
                     var prevF = queue.length ? queue[queue.length - 1] : null;
                     if (!prevF || prevF.surah !== seg.surah || prevF.ayah !== currentAyah) {
                       queue.push({ surah: seg.surah, ayah: currentAyah, rowNum: itemLine.rowNum });
+                    }
+                    if (self._hasSpecialAyahEndMarker(itemLine.tokens) && currentAyah < maxA) {
+                      currentAyah++;
+                    }
+                  }
+                }
+
+                /* Guarantee final ayah(s) of a Surah finishing on this page are NEVER skipped before the next Surah */
+                var surahEndsHere = (g < segments.length - 1) || (g === segments.length - 1 && (nextPageStartsNewSurah || p === 610));
+                if (surahEndsHere) {
+                  var lastSegRow = seg.lines[seg.lines.length - 1].rowNum;
+                  var lastAddedForSurah = 0;
+                  for (var qBack = queue.length - 1; qBack >= 0; qBack--) {
+                    if (queue[qBack].surah === seg.surah) {
+                      lastAddedForSurah = queue[qBack].ayah;
+                      break;
+                    }
+                  }
+                  if (lastAddedForSurah < maxA) {
+                    for (var remA = Math.max(1, lastAddedForSurah + 1); remA <= maxA; remA++) {
+                      queue.push({ surah: seg.surah, ayah: remA, rowNum: lastSegRow });
                     }
                   }
                 }
@@ -3496,6 +3579,24 @@ window.EMBEDDED_SURAHS_AR={"1":[{"n":1,"t":"اَلْحَمْدُ لِلّٰهِ 
             }
           });
         });
+      },
+
+      _fitMushafLines: function (canvas) {
+        if (!canvas) return;
+        var lines = canvas.querySelectorAll('.mushaf-line');
+        for (var i = 0; i < lines.length; i++) {
+          var el = lines[i];
+          if (el.classList.contains('mushaf-basmallah-line')) continue;
+          if (el.clientWidth < 20) continue;
+          el.style.fontSize = '';
+          var fs = parseFloat(window.getComputedStyle(el).fontSize) || 16;
+          var guard = 0;
+          while (el.scrollWidth > el.clientWidth + 1 && fs > 11 && guard < 24) {
+            fs -= 0.4;
+            el.style.fontSize = fs.toFixed(2) + 'px';
+            guard++;
+          }
+        }
       },
 
       loadPage: function (pageNum, turnDir) {
@@ -3646,20 +3747,9 @@ window.EMBEDDED_SURAHS_AR={"1":[{"n":1,"t":"اَلْحَمْدُ لِلّٰهِ 
           canvas.innerHTML = html || '<div class="pending-box"><p>Safha khali hai.</p></div>';
         }
 
-        var rowEls = canvas.querySelectorAll('.mushaf-line-row');
-        for (var idxR = 0; idxR < rowEls.length; idxR++) {
-          rowEls[idxR].addEventListener('click', function () {
-            var wasSelected = this.classList.contains('custom-range-selected');
-            var prevAll = canvas.querySelectorAll('.mushaf-line-row.custom-range-selected');
-            for (var pIdx = 0; pIdx < prevAll.length; pIdx++) {
-              prevAll[pIdx].classList.remove('custom-range-selected');
-            }
-            if (!wasSelected) {
-              this.classList.add('custom-range-selected');
-              var rNum = parseInt(this.getAttribute('data-row') || '1', 10) || 1;
-              MushafAudio.playFromRowIndex(rNum);
-            }
-          });
+        self._fitMushafLines(canvas);
+        if (window.requestAnimationFrame) {
+          window.requestAnimationFrame(function () { self._fitMushafLines(canvas); });
         }
 
         self.buildAccuratePageQueueAsync(pageNum, pageObj, function (resolvedQ) {
@@ -3789,9 +3879,9 @@ window.EMBEDDED_SURAHS_AR={"1":[{"n":1,"t":"اَلْحَمْدُ لِلّٰهِ 
         this.cursorIdx = 0;
         this.bismillahRevealed = false;
         App.setMushafPage(startPage || 1);
-        var pInfo = PARA_DATA[paraNum - 1] || ['', 'Para ' + paraNum, 1];
+        var pInfo = PARA_DATA[paraNum - 1] || ['الم', 'Para ' + paraNum, 1];
         if ($('mem-running-meta')) {
-          $('mem-running-meta').innerHTML = '<span>Para ' + paraNum + ' • ' + pInfo[1] + '</span> <span class="num-ar-badge">' + toArabicDigits(paraNum) + '</span>';
+          $('mem-running-meta').innerHTML = '<span>' + pInfo[0] + '</span> ' + arNumSpan(paraNum);
         }
         Router.navigate('screen-memorize-practice');
         this.renderMemorizePage(AppState.currentMushafPage);
@@ -3805,8 +3895,8 @@ window.EMBEDDED_SURAHS_AR={"1":[{"n":1,"t":"اَلْحَمْدُ لِلّٰهِ 
         self.bismillahRevealed = false;
         var sInfo = SurahEngine.findSurah(surahNum);
         AppState.currentSurah = surahNum;
-        if ($('mem-running-meta')) {
-          $('mem-running-meta').innerHTML = '<span>' + sInfo[2] + '</span> <span class="num-ar-badge">' + toArabicDigits(surahNum) + '</span>';
+        if ($('mem-running-surah')) {
+          $('mem-running-surah').innerHTML = '<span>' + sInfo[1] + '</span> ' + arNumSpan(surahNum);
         }
         var rng = self._getSurahPageRange(self.targetSurah);
         self.surahStartPage = rng.start;
@@ -3908,10 +3998,23 @@ window.EMBEDDED_SURAHS_AR={"1":[{"n":1,"t":"اَلْحَمْدُ لِلّٰهِ 
           }
 
           canvas.innerHTML = html;
+          var hdrSurahNum = self.targetSurah > 0 ? self.targetSurah : (activeSurah || MushafEngine.getSurahForPage(pageNum));
+          var hdrSurahInfo = SurahEngine.findSurah(hdrSurahNum);
+          var hdrParaNum = MushafEngine.getParaForPage(pageNum);
+          var hdrParaInfo = PARA_DATA[hdrParaNum - 1] || ['الم', '', 1];
+          if ($('mem-running-surah') && hdrSurahInfo) {
+            $('mem-running-surah').innerHTML = '<span>' + hdrSurahInfo[1] + '</span> ' + arNumSpan(hdrSurahNum);
+          }
+          if ($('mem-running-meta') && hdrParaInfo) {
+            $('mem-running-meta').innerHTML = '<span>' + hdrParaInfo[0] + '</span> ' + arNumSpan(hdrParaNum);
+          }
           if ($('mem-page-indicator')) {
             $('mem-page-indicator').innerHTML = '<span>' + pageNum + '</span><span>/</span><span class="num-ar-badge">' + toArabicDigits(pageNum) + '</span>';
           }
           self._fitMemorizeLines();
+          if (window.requestAnimationFrame) {
+            window.requestAnimationFrame(function () { self._fitMemorizeLines(); });
+          }
         });
       },
 
@@ -3920,11 +4023,13 @@ window.EMBEDDED_SURAHS_AR={"1":[{"n":1,"t":"اَلْحَمْدُ لِلّٰهِ 
         for (var i = 0; i < lines.length; i++) {
           var el = lines[i];
           if (el.classList.contains('mushaf-basmallah-line')) continue;
+          if (el.clientWidth < 20) continue;
+          el.style.fontSize = '';
           var fs = parseFloat(window.getComputedStyle(el).fontSize) || 16;
           var guard = 0;
-          while (el.scrollWidth > el.clientWidth + 2 && fs > 9.5 && guard < 18) {
-            fs -= 0.5;
-            el.style.fontSize = fs + 'px';
+          while (el.scrollWidth > el.clientWidth + 1 && fs > 10 && guard < 24) {
+            fs -= 0.4;
+            el.style.fontSize = fs.toFixed(2) + 'px';
             guard++;
           }
         }
